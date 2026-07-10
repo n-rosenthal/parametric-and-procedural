@@ -1,0 +1,12 @@
+numpy
+pandas
+jinja2
+entrypoints
+jsonschema
+matplotlib
+seaborn
+toolz
+altair
+vega
+vega_datasets
+vl-convert-python
