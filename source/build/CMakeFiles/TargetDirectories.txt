@@ -1,0 +1,4 @@
+/home/nrdc/org/roam/projects/programming/parametric-and-procedural/source/build/CMakeFiles/main.dir
+/home/nrdc/org/roam/projects/programming/parametric-and-procedural/source/build/CMakeFiles/run.dir
+/home/nrdc/org/roam/projects/programming/parametric-and-procedural/source/build/CMakeFiles/edit_cache.dir
+/home/nrdc/org/roam/projects/programming/parametric-and-procedural/source/build/CMakeFiles/rebuild_cache.dir
