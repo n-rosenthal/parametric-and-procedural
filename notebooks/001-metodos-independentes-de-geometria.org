@@ -1,0 +1,377 @@
+#+title:    Métodos Independentes de Geometria
+#+author:   n-rosenthal
+
+O pacote ~Math~ contém definições matemática independentes da geometria específica dos objetos. São *primitivas matemáticas* para nossos estudos em Computação Gráfica e produção de componentes paramétricos e procedurais. Neste pacote, definiremos
+
+1. ~BoundingBox~: uma caixa delimitadora para objetos geométricos;
+2. ~Plane~: um plano definido por um ponto e uma normal.
+3. ~Ray~: um raio definido por um ponto de origem e uma direção;
+4. ~Transform~: uma transformação linear que pode ser aplicada a objetos geométricos.
+5. ~Intersection~: métodos para verificação de intersecção entre primitivas geométricas
+
+Os módulos aqui definimos são utilizados por diversos outros módulos.
+
+Existem algumas opções para módulos futuros:
+
+- ~Frustrum~:   definição para uma pirâmide truncada. Seu uso mais comum é na definição do campo de visão da câmera.
+- ~Quaternion~: talvez seja interessante definir essa estrutura devido as possibilidades de orientação que ela traz. Requer mais estudo.
+- ~Vector~, ~Matrix~: definições internas e particulares ao projeto para vetores e matrizes. Não sei, entretanto, se isto não tornaria as aplicações menos otimizadas do que utilizar as bibliotecas atuais; 
+- ~Constants~: é uma boa ideia para armazenar constantes de uso para as primitivas geométricas.
+
+* ~BoundingBox~
+Uma =BoundingBox= ou *caixa delimitadora* é um retângulo tridimensional que envolve um objeto geométrico. Ela é definida por dois pontos: o ponto mínimo e o ponto máximo, que representam os cantos opostos da caixa. Usamos caixas delimitadoras para, principalmente, particionar o espaço da cena virtual e poder assim selecionar determinados, e não todos, os objetos que desejamos trabalhar; e para melhorar a eficiência de algoritmos de interseção, como o teste de colisão entre objetos.
+
+** Definição
+
+Formalmente, uma =BoundingBox= \( B \) é um par de pontos \( (p_{min}, p_{max}) \in \mathbb{R}^4 \), onde \( p_{min} = (x_{min}, y_{min}, z_{min}), 1.0 \) e \( p_{max} = (x_{max}, y_{max}, z_{max}), 1.0 \). A caixa delimitadora é definida pelas seguintes condições:
+
+\begin{equation}
+    B = \{ p \in \mathbb{R}^4 : p_{min} \leq p \leq p_{max} \}
+\end{equation}
+
+O *centro* de uma caixa delimitadora é o ponto médio entre seus pontos máximo e mínimo:
+
+    c = \frac{p_{min} + p_{max}}{2}
+\end{equation}
+
+E o *tamanho* da caixa delimitadora é dado pelo vetor:
+
+\begin{equation}
+    s = p_{max} - p_{min}
+\end{equation}
+
+** Implementação
+#+begin_src cpp
+/**
+    * @brief   Defines a bounding box in 3D space, using homogeneous coordinates (glm::vec4).
+    * @details The bounding box is defined by its minimum and maximum points, which are represented as `glm::vec4` objects.
+    *          The minimum point represents the corner of the box with the lowest x, y, and z coordinates,
+    *          and the maximum point represents the corner with the highest x, y, and z coordinates.
+    * 
+    *          The `center` of the bounding box can be computed as the average of the minimum and maximum points,
+    *          and the `size` of the bounding box can be computed as the difference between the minimum and maximum points.
+    */
+class   BoundingBox {
+public:
+    /**
+        * @brief Default constructor for the `BoundingBox` class.
+        * 
+        * @param min   (glm::vec4)
+        *         The minimum point of the bounding box.
+        * @param max   (glm::vec4)
+        *         The maximum point of the bounding box.
+        */
+    BoundingBox(glm::vec4 min,
+                glm::vec4 max)
+        : min(min), max(max) {};
+
+    /**
+        * @brief   Returns the center point of the bounding box.
+        * @details The center point is computed as the average of the minimum and maximum points.
+        * 
+        * @return glm::vec4 
+        */
+    glm::vec4 center() const { return (min + max) * 0.5f; }
+
+    /**
+        * @brief   Returns the size of the bounding box.
+        * @details The size is computed as the difference between the maximum and minimum points.
+        * 
+        * @return glm::vec4 
+        */
+    glm::vec4 size() const { return max - min; }
+
+    /**
+        * @brief   Getter for the minimum point of the bounding box.
+        * 
+        * @return glm::vec4 
+        */
+    glm::vec4 getMin() const { return min; }
+
+    /**
+        * @brief   Getter for the maximum point of the bounding box.
+        * 
+        * @return glm::vec4 
+        */
+    glm::vec4 getMax() const { return max; }
+
+private:
+    glm::vec4 min;
+    glm::vec4 max;
+};
+#+end_src
+
+* ~Ray~
+Um raio é definido por um ponto de origem e uma direção. Podemos utilizar raios para descrever a trajetória da luz em algoritmos de /ray tracing/ e para testar interseções com objetos geométricos.
+
+** Definição
+Um raio \( R \) parametrizado sobre \( t \in \mathbb{R} \) é
+
+#+begin{equation}
+    R(t) = O + t \cdot \hat{D}, \, \, t \geq 0
+#+end{equation}
+
+onde \( O \) é o ponto de origem do raio e \( \hat{D} \) é o vetor unitário direção.
+
+** Implementação
+
+#+begin_src cpp
+class Ray {
+public:
+    /**
+        * @brief Default constructor for the `Ray` class.
+        */
+    Ray() = default;
+
+    /**
+        * @brief   Constructs a `Ray` object with the given origin and direction.
+        * @param   origin (glm::vec3)
+        *          The origin point of the ray.
+        * @param   direction (glm::vec3)
+        *          The direction vector of the ray.
+        */
+    Ray(const glm::vec4& origin,
+        const glm::vec4& direction)
+        :   origin(origin),
+            direction(glm::normalize(direction)) {};
+
+    /**
+        * @brief   Returns a point along the ray at parameter t.
+        * @param   t (float)
+        *          The parameter t >= 0.
+        * @return  glm::vec4
+        *          The point along the ray at parameter t.
+        * 
+        * @throws std::invalid_argument if t < 0.
+        */
+    glm::vec4 point(float t) const {
+        if (t < 0.0f) {
+            throw std::invalid_argument("[ERROR::Math::Ray::point()] Parameter `t` must be non-negative, got `" + 
+                                        std::to_string(t) + "` instead.");
+        }
+
+        //  P(t) = O + t * D
+        return origin + t * direction;
+    };
+
+
+    /**
+        * @brief   Getter for the origin of the ray.
+        * @return  glm::vec4
+        *          The origin of the ray.
+        */
+    glm::vec4 getOrigin() const { return origin; }
+
+    /**
+        * @brief   Getter for the direction of the ray.
+        * @return  glm::vec4
+        *          The direction of the ray.
+        */
+    glm::vec4 getDirection() const { return direction; }
+private:
+    glm::vec4 origin;
+    glm::vec4 direction;
+};
+#+end_src
+
+* ~Plane~
+Um plano é definido implicitamente por um ponto \( p \) e um vetor normal \( \hat{n} \), perpendiular ao plano em \( p \).
+
+** Definição
+Um plano *euclidiano* é um espaço eucliano de dimensão 2, denotado \( \mathbb{E}^2 \). É um espaço geométrico no qual são necessários *dois números* para determinar a posição de cada ponto. É um *espaço afim*, portanto permite a definição de *paralelismo de retas* e *propriedades métricas*, como distância entre pontos e ângulos entre retas. 
+
+
+** Implementação
+#+begin_src cpp
+class Plane {
+public:
+    /**
+        * @brief Default constructor for the Plane class.
+        */
+    Plane() = default;
+
+    /**
+        * @brief Construct a new Plane object
+        * 
+        * @param normal    (glm::vec4)
+        *                  The normal vector of the plane. It should be a unit vector.
+        * @param distance  (float)
+        *                  The distance from the origin to the plane along the normal vector.
+        */
+    Plane(const glm::vec4& normal,
+        float distance)
+        :   normal_(glm::normalize(normal)),
+            distance_(distance)
+    {};
+
+
+    /**
+        * @brief Construct a new Plane object
+        * 
+        * @param point     (glm::vec4)
+        *                  A point on the plane.
+        * @param normal    (glm::vec4)
+        *                  The normal vector of the plane. It should be a unit vector.
+        */
+    Plane(const glm::vec4& point,
+        const glm::vec4& normal)
+        : normal_(glm::normalize(normal)) {
+        distance_ = -glm::dot(normal_, point);
+    };
+
+    /**
+        * @brief   Getter for the normal vector of the plane.
+        * 
+        * @return const glm::vec4& 
+        *          The normal vector of the plane.
+        */
+    const glm::vec4& normal() const {
+        return normal_;
+    }
+
+
+    /**
+        * @brief   Getter for the distance from the origin to the plane along the normal vector.
+        * 
+        * @return float 
+        *          The distance from the origin to the plane along the normal vector.
+        */
+    float distance() const {
+        return distance_;
+    }
+
+    /**
+        * @brief   Computes the signed distance from a point to the plane.
+        * 
+        * @param p (glm::vec4)
+        *          The point from which to compute the signed distance to the plane.
+        * @return float
+        *          The signed distance from the point to the plane. A positive value indicates that the point is in front of the plane, while a negative value indicates that it is behind the plane.
+        */
+    float signedDistance(
+        const glm::vec4& p
+    ) const
+    {
+        return glm::dot(normal_, p) + distance_;
+    }
+
+private:
+    glm::vec4 normal_{0.f,1.f,0.f,0.f};
+    float distance_{0.f};
+};
+#+end_src
+
+* ~Transform~
+A ideia por trás de ~Transform~ é encapsular transformações geométricas (lineares ou afins) que podem ser aplicadas a objetos geométricos. A classe ~Transform~ é uma abstração que permite representar e manipular transformações de forma consistente e eficiente. Em um primeiro momento, vamos implementar apenas as transformações geométricas necessárias para criar uma *matriz de modelagem* geral, aplicável a todos os objetos da cena virtual.
+
+** Implementação
+
+#+begin_src cpp
+/**
+* @brief   Currently, the `Transform` class is a simple implementation that allows for the creation of a general *modeling matrix* applicable to all objects in a virtual scene. It encapsulates translation, rotation (using Euler angles), and scaling transformations.
+*/
+class Transform {
+public:
+    glm::vec3 position{0.f};
+    glm::vec3 rotation{0.f};      // Euler angles (radians)
+    glm::vec3 scale{1.f};
+
+
+    /**
+        * @brief   Computes the modeling matrix for the transform.
+        * 
+        * @return glm::mat4
+        *          The modeling matrix for the transform.
+        */
+    glm::mat4 ModelMatrix() const{
+        //  Initializes the matrix as all-ones
+        glm::mat4 M(1.f);
+
+        //  The translation matrix for a given position 
+        //  M = T
+        M = glm::translate(M, position);
+
+        //  The rotation matrices for given rotations
+        //  M = Rz * Ry * Rx * T
+        M = glm::rotate(M, rotation.x,
+                        glm::vec3(1,0,0));
+
+        M = glm::rotate(M, rotation.y,
+                        glm::vec3(0,1,0));
+
+        M = glm::rotate(M, rotation.z,
+                        glm::vec3(0,0,1));
+
+        //  The scaling matrix for a given scale
+        //  M = S * (Rz * Ry * Rx) * T
+        M = glm::scale(M, scale);
+
+        return M;
+    }
+};
+#+end_src
+
+* ~Intersect~
+O módulo ~Math/Intersect.hpp~ define uma /namespace/ específico para tratar intersecções entre primitivas geométricas dentro do /namespace/ ~Math~.
+
+** Implementação
+#+begin_src cpp
+namespace Math::Intersection {
+    /**
+     * @brief   Verifies the intersection between a ray and a plane.
+     * 
+     * @param   ray     (const Ray&)
+     *                  The ray to check for intersection.
+     * @param   plane   (const Plane&)
+     *                  The plane to check for intersection.
+     * @param   t       (float&)
+     *                  The parameter t of the intersection point.
+     *                  
+     * @return  true,   if the ray intersects the plane.
+     * @return  false,  otherwise. 
+     */
+    bool rayPlane(const Ray& ray,
+                const Plane& plane,
+                float& t);
+
+    /**
+     * @brief   Verifies the intersection between a ray and a bounding box.
+     * 
+     * @param   ray     (const Ray&)
+     *                  The ray to check for intersection.
+     * @param   box     (const BoundingBox&)
+     *                  The bounding box to check for intersection.
+     * @param   t       (float&)
+     *                  The parameter t of the intersection point.
+     *                  
+     * @return  true,   if the ray intersects the bounding box.
+     * @return  false,  otherwise. 
+     */
+    bool rayBox(const Ray& ray,
+                const BoundingBox& box,
+                float& t);
+
+    /**
+     * @brief   Verifies the intersection between a ray and a triangle defined by three points.
+     * 
+     * @param   ray     (const Ray&)
+     *                  The ray to check for intersection.
+     * @param   a       (const glm::vec4&)
+     *                  the first point of the triangle.
+     * @param   b       (const glm::vec4&)
+     *                  the second point of the triangle.
+     * @param   c       (const glm::vec4&)
+     *                  the third point of the triangle.
+     * @param   t       (float&)
+     *                  The parameter t of the intersection point.
+     *                  
+     * @return  true,   if the ray intersects the triangle.
+     * @return  false,  otherwise. 
+     */
+    bool rayTriangle(const Ray& ray,
+                    const glm::vec4& a,
+                    const glm::vec4& b,
+                    const glm::vec4& c,
+                    float& t);
+};
+#+end_src
